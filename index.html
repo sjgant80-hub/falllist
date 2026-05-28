@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1a1a17">
+<title>FallList · newsletter without the 10% cut · or the per-subscriber bill</title>
+<meta name="description" content="Mailchimp charges per contact. Substack takes 10% forever. FallList is one HTML file. Bring your own mailer key. Send to your list. £0 + $1/1000 emails.">
+<link rel="manifest" href='data:application/manifest+json,{"name":"FallList","short_name":"FallList","start_url":".","display":"standalone","background_color":"#1a1a17","theme_color":"#e8a012","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22><rect width=%2264%22 height=%2264%22 fill=%22%231a1a17%22/><path d=%22M12 18 L52 18 L52 46 L12 46 Z M12 18 L32 32 L52 18%22 fill=%22none%22 stroke=%22%23e8a012%22 stroke-width=%223%22 stroke-linejoin=%22round%22/></svg>","sizes":"any","type":"image/svg+xml"}]}'>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #1a1a17;
+  --bg-2: #23231f;
+  --bg-3: #2d2d28;
+  --line: #3a3a33;
+  --text: #f5f1e8;
+  --muted: #948f80;
+  --gold: #e8a012;
+  --gold-dim: #b87d0d;
+  --green: #44aa44;
+  --red: #ff4444;
+  --r: 12px;
+}
+html, body { background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 100dvh; -webkit-font-smoothing: antialiased; }
+body { padding-bottom: env(safe-area-inset-bottom); }
+h1, h2, h3 { font-family: 'Syne', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+h1 { font-size: 22px; }
+h2 { font-size: 18px; }
+h3 { font-size: 14px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.06em; }
+
+header { padding: 14px 16px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 50; backdrop-filter: blur(8px); }
+.top { display: flex; align-items: center; justify-content: space-between; max-width: 1000px; margin: 0 auto; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-mark { width: 40px; height: 40px; background: var(--gold); border-radius: 8px; display: grid; place-items: center; color: #1a1a17; font-family: 'Syne'; font-weight: 800; font-size: 20px; }
+.brand-name { font-family: 'Syne'; font-weight: 800; font-size: 18px; }
+.brand-sub { color: var(--muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+.icon-btn { background: var(--bg-2); border: 1px solid var(--line); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13px; cursor: pointer; font-family: inherit; }
+
+main { padding: 20px 16px 100px; max-width: 1000px; margin: 0 auto; }
+.view { display: none; }
+.view.active { display: block; }
+
+.card { background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; margin-bottom: 16px; }
+.card-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+
+.field { margin-bottom: 12px; }
+.field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.field input, .field select, .field textarea { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text); padding: 12px; border-radius: 8px; font-size: 15px; font-family: inherit; }
+.field input:focus, .field textarea:focus, .field select:focus { outline: 2px solid var(--gold); outline-offset: -1px; }
+.field textarea { min-height: 100px; resize: vertical; line-height: 1.5; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
+
+.btn { background: var(--gold); color: #1a1a17; border: none; padding: 14px 18px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; width: 100%; }
+.btn:hover { background: var(--gold-dim); }
+.btn:active { transform: scale(0.98); }
+.btn.secondary { background: var(--bg-3); color: var(--text); border: 1px solid var(--line); }
+.btn.green { background: var(--green); color: #fff; }
+.btn.red { background: var(--red); color: #fff; }
+.btn.small { padding: 8px 14px; font-size: 13px; width: auto; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* subscriber list */
+.subs-list { max-height: 400px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: var(--bg); }
+.sub-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.sub-item:last-child { border-bottom: none; }
+.sub-item .email { font-weight: 600; }
+.sub-item .meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.sub-item .actions button { background: none; border: 1px solid var(--line); color: var(--muted); padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer; font-family: inherit; }
+.sub-item .actions button:hover { color: var(--red); border-color: var(--red); }
+
+/* draft / send */
+.draft-preview { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 16px; font-family: ui-monospace, monospace; font-size: 13px; max-height: 400px; overflow-y: auto; }
+
+/* stats */
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+@media (max-width: 480px) { .stat-grid { grid-template-columns: 1fr; } }
+.stat { text-align: center; padding: 14px; background: var(--bg-3); border-radius: 8px; }
+.stat .num { font-family: 'Syne'; font-weight: 800; font-size: 28px; color: var(--gold); line-height: 1; }
+.stat .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 4px; }
+
+/* sent items */
+.sent-item { background: var(--bg-3); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+.sent-item .subject { font-weight: 700; margin-bottom: 4px; }
+.sent-item .meta { color: var(--muted); font-size: 12px; }
+.sent-item .actions { display: flex; gap: 6px; margin-top: 8px; }
+
+/* nav */
+nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-2); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px 4px calc(8px + env(safe-area-inset-bottom)); z-index: 60; }
+.tab { background: none; border: none; color: var(--muted); padding: 10px 4px; font-size: 11px; font-family: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.tab.active { color: var(--gold); }
+.tab .ic { font-size: 18px; }
+
+/* modal */
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: none; align-items: flex-end; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--bg-2); width: 100%; max-width: 720px; margin: 0 auto; border-radius: 16px 16px 0 0; padding: 22px; max-height: 90vh; overflow-y: auto; padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+.modal-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-close { background: none; border: none; color: var(--muted); font-size: 28px; cursor: pointer; padding: 0 8px; line-height: 1; }
+
+.toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: var(--gold); color: #1a1a17; padding: 10px 20px; border-radius: 24px; font-weight: 700; z-index: 200; opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-10px); }
+
+footer { text-align: center; padding: 24px 16px; color: var(--muted); font-size: 11px; }
+footer a { color: var(--gold); text-decoration: none; }
+
+.empty { text-align: center; padding: 36px 20px; color: var(--muted); }
+.empty .icon { font-size: 40px; opacity: 0.4; margin-bottom: 10px; }
+.row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.row:last-child { border-bottom: none; }
+.row .lbl { color: var(--muted); }
+.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+.warn { background: rgba(255,68,68,0.1); border: 1px solid var(--red); padding: 12px; border-radius: 8px; margin: 10px 0; font-size: 13px; }
+.good { background: rgba(68,170,68,0.1); border: 1px solid var(--green); padding: 12px; border-radius: 8px; margin: 10px 0; font-size: 13px; }
+.share-link { background: rgba(232,160,18,0.08); border: 1px dashed var(--gold); padding: 12px; border-radius: 8px; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; cursor: pointer; margin: 10px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <div class="brand">
+      <div class="brand-mark">✉</div>
+      <div>
+        <div class="brand-name">FallList</div>
+        <div class="brand-sub">your list · your terms · 0% fee</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="icon-btn" id="btnTier">offline</button>
+      <button class="icon-btn" id="btnSettings">⚙</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- DASHBOARD -->
+<section class="view active" id="view-dash">
+  <div class="card">
+    <div class="stat-grid">
+      <div class="stat"><div class="num" id="dashSubs">0</div><div class="lbl">Subscribers</div></div>
+      <div class="stat"><div class="num" id="dashSent">0</div><div class="lbl">Emails sent</div></div>
+      <div class="stat"><div class="num" id="dashCost">£0</div><div class="lbl">Cost vs Mailchimp/yr</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <h3>What you'd be paying</h3>
+    <div class="row"><span class="lbl">Mailchimp Essentials @ 500 subs</span><span style="color:var(--red)">£156/yr</span></div>
+    <div class="row"><span class="lbl">Mailchimp Standard @ 2,500 subs</span><span style="color:var(--red)">£600/yr</span></div>
+    <div class="row"><span class="lbl">Mailchimp Premium @ 10,000 subs</span><span style="color:var(--red)">£4,200/yr</span></div>
+    <div class="row"><span class="lbl">Substack @ £1k/mo MRR</span><span style="color:var(--red)">£1,200/yr (10% cut)</span></div>
+    <div class="row"><span class="lbl"><b>FallList</b></span><span style="color:var(--green);font-weight:700">£0 · just BYOM cost</span></div>
+    <div class="hint" style="margin-top:8px">BYOM = Bring Your Own Mailer · paste a Resend / Postmark / Mailgun / SendGrid API key. ~£1 per 1,000 emails sent at standard rates.</div>
+  </div>
+  <div class="card">
+    <h3>Quick actions</h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn small" onclick="switchView('compose')">✎ Write</button>
+      <button class="btn small secondary" onclick="addSubModal()">+ Add subscriber</button>
+      <button class="btn small secondary" onclick="importCSV()">📥 Import CSV</button>
+    </div>
+  </div>
+</section>
+
+<!-- SUBSCRIBERS -->
+<section class="view" id="view-subs">
+  <div class="card">
+    <div class="card-hd">
+      <h2>Subscribers · <span id="subsCount">0</span></h2>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn small" onclick="addSubModal()">+ Add</button>
+        <button class="btn small secondary" onclick="importCSV()">CSV</button>
+        <button class="btn small secondary" onclick="exportCSV()">↓</button>
+      </div>
+    </div>
+    <div class="subs-list" id="subsList"></div>
+  </div>
+  <div class="card">
+    <h3>Public sign-up form</h3>
+    <p class="muted" style="font-size:13px;margin-bottom:8px">This URL is your public sign-up page. New emails land in your list locally.</p>
+    <div class="share-link" id="signupLink" onclick="copyLink('signupLink')">Loading...</div>
+    <button class="btn small secondary" onclick="copyEmbedCode()">▦ Copy iframe</button>
+  </div>
+</section>
+
+<!-- COMPOSE -->
+<section class="view" id="view-compose">
+  <div class="card">
+    <h2>Write a newsletter</h2>
+    <div class="field"><label>Subject</label><input id="cpSubject" placeholder='"This week in sovereign tools..."'></div>
+    <div class="field"><label>From name</label><input id="cpFromName" placeholder="Your name"></div>
+    <div class="field"><label>Body · Markdown</label><textarea id="cpBody" placeholder="# Hi
+
+Plain markdown works. **bold**, *italic*, [links](https://example.com), lists, code blocks." style="min-height:280px"></textarea>
+      <div class="hint">Standard Markdown · # headings · **bold** · *italic* · [links](url) · - lists · ` code `</div>
+    </div>
+    <div class="card-hd" style="margin:14px 0 0">
+      <h3>Preview</h3>
+      <button class="btn small secondary" onclick="updatePreview()">↻ Refresh</button>
+    </div>
+    <div class="draft-preview" id="cpPreview"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn" onclick="saveDraft()">💾 Save draft</button>
+      <button class="btn green" onclick="sendNewsletter()" id="sendBtn">📤 Send to list</button>
+      <button class="btn small secondary" onclick="testSend()">🧪 Test to your email</button>
+    </div>
+    <div id="sendStatus" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<!-- SENT -->
+<section class="view" id="view-sent">
+  <div class="card">
+    <div class="card-hd">
+      <h2>Sent · <span id="sentCount">0</span></h2>
+    </div>
+    <div id="sentList"></div>
+  </div>
+</section>
+
+<!-- SHARE -->
+<section class="view" id="view-share">
+  <div class="card">
+    <h2>Share + backup</h2>
+    <p class="muted" style="font-size:13px;margin-bottom:8px">Your subscribers and drafts live on this device. Back them up regularly.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn small" onclick="exportAll()">📥 Backup all (JSON)</button>
+      <button class="btn small secondary" onclick="importAll()">📤 Restore</button>
+      <button class="btn small secondary" onclick="exportCSV()">📊 Subscribers CSV</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>How sending works (BYOM)</h2>
+    <p style="font-size:14px;margin-bottom:8px">FallList doesn't run an SMTP server. Instead, you bring your own:</p>
+    <ul style="margin-left:18px;line-height:1.7;font-size:14px;color:var(--muted)">
+      <li><b style="color:var(--text)">Resend</b> · easiest · <a href="https://resend.com" target="_blank" style="color:var(--gold)">resend.com</a> · 3,000 free/mo then $20/mo</li>
+      <li><b style="color:var(--text)">Postmark</b> · best deliverability · ~$15/mo for 10,000 emails</li>
+      <li><b style="color:var(--text)">Mailgun</b> · cheap at scale · $1 per 1,000 emails</li>
+      <li><b style="color:var(--text)">SendGrid</b> · enterprise · 100/day free</li>
+    </ul>
+    <p class="hint" style="margin-top:10px">Paste your chosen API key in Settings. FallList sends direct from your browser to the mailer's API · no server in the middle · no rate cuts.</p>
+  </div>
+</section>
+
+<footer>
+  FallList · ◊·κ=1 · single HTML · on-device · prime 271 · <a href="https://github.com/sjgant80-hub/falllist" target="_blank">source</a>
+</footer>
+
+</main>
+
+<nav>
+  <button class="tab active" data-view="dash"><span class="ic">▦</span>Home</button>
+  <button class="tab" data-view="subs"><span class="ic">◯</span>Subs</button>
+  <button class="tab" data-view="compose"><span class="ic">✎</span>Write</button>
+  <button class="tab" data-view="sent"><span class="ic">📤</span>Sent</button>
+  <button class="tab" data-view="share"><span class="ic">⚙</span>Share</button>
+</nav>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="modal-hd">
+      <h2 id="modalTitle">·</h2>
+      <button class="modal-close" onclick="closeModal()">×</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">·</div>
+
+<script>
+'use strict';
+
+const VERSION = '1.0.0';
+const PRIME = 271;
+const STORE = 'falllist-state';
+
+let state = {
+  subscribers: [],     // { id, email, name, addedAt, source, status }
+  drafts: [],          // saved unsent
+  sent: [],            // { id, subject, body, sentAt, recipientCount, results }
+  settings: {
+    yourName: 'Simon',
+    yourFromEmail: '',
+    yourFromDomain: '',
+    mailerProvider: 'resend', // resend | postmark | mailgun | sendgrid
+    mailerKey: '',
+    mailgunDomain: '',
+    listName: 'My Newsletter',
+    confirmDoubleOptIn: false,
+    anthropicKey: '', openaiKey: '', geminiKey: '', openrouterKey: '',
+  },
+  meta: { created: Date.now(), version: VERSION },
+};
+
+async function saveState() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) {} }
+async function loadState() { try { const raw = localStorage.getItem(STORE); if (raw) state = Object.assign(state, JSON.parse(raw)); } catch (e) {} }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.classList.remove('show'), 1800);
+}
+function escHTML(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+// ═══ CASCADE ═══
+const Cascade = {
+  async detectTier() {
+    if (await Cascade._probeLocal()) return 'T2';
+    const s = state.settings;
+    if (s.anthropicKey || s.openaiKey || s.geminiKey || s.openrouterKey) return 'T3';
+    return 'T0';
+  },
+  async _probeLocal() {
+    if (Cascade._localProbed !== undefined) return Cascade._localProbed;
+    try {
+      const r = await Promise.race([
+        fetch('http://127.0.0.1:11434/api/tags').then(r => r.ok),
+        new Promise(res => setTimeout(() => res(false), 400)),
+      ]);
+      Cascade._localProbed = !!r;
+    } catch (e) { Cascade._localProbed = false; }
+    return Cascade._localProbed;
+  },
+};
+
+const KCC = {
+  log(ring, action, w = 1) {
+    state.kcc = (state.kcc || []).concat([{ ts: Date.now(), ring, action, w }]).slice(-500);
+    saveState();
+    try { new BroadcastChannel('fall-signal').postMessage({ source: 'falllist', type: 'kcc', ring, action, w, ts: Date.now() }); } catch (e) {}
+  },
+};
+
+// ═══ VIEW ROUTER ═══
+function switchView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.view === name));
+  if (name === 'dash') renderDash();
+  if (name === 'subs') renderSubs();
+  if (name === 'compose') renderCompose();
+  if (name === 'sent') renderSent();
+  if (name === 'share') renderShare();
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => switchView(t.dataset.view)));
+
+// ═══════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════
+function renderDash() {
+  document.getElementById('dashSubs').textContent = state.subscribers.length;
+  document.getElementById('dashSent').textContent = state.sent.reduce((s, e) => s + (e.recipientCount || 0), 0);
+  // Mailchimp comparison
+  const n = state.subscribers.length;
+  let mcCost = 0;
+  if (n <= 500) mcCost = 13 * 12;
+  else if (n <= 2500) mcCost = 50 * 12;
+  else if (n <= 10000) mcCost = 350 * 12;
+  else mcCost = 1000 * 12;
+  document.getElementById('dashCost').textContent = '£' + mcCost.toLocaleString('en-GB');
+}
+
+// ═══════════════════════════════════════════
+// AGENT α · SUBSCRIBER MANAGEMENT
+// ═══════════════════════════════════════════
+function renderSubs() {
+  const root = document.getElementById('subsList');
+  document.getElementById('subsCount').textContent = state.subscribers.length;
+  if (!state.subscribers.length) { root.innerHTML = '<div class="empty"><div class="icon">◯</div><h3 style="color:var(--text)">No subscribers yet</h3><p>Add one above, import CSV, or share your sign-up link.</p></div>'; return; }
+  const sorted = [...state.subscribers].sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+  root.innerHTML = sorted.map(s => `
+    <div class="sub-item">
+      <div>
+        <div class="email">${escHTML(s.email)}</div>
+        <div class="meta">${escHTML(s.name || '')} ${s.source ? '· ' + escHTML(s.source) : ''} · added ${new Date(s.addedAt).toLocaleDateString('en-GB')}</div>
+      </div>
+      <div class="actions">
+        <button onclick="removeSub('${s.id}')">remove</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('signupLink').textContent = location.href.split('?')[0] + '?signup=1';
+}
+
+function addSubModal() {
+  showModal('Add subscriber', `
+    <div class="field"><label>Email</label><input id="addEmail" type="email" placeholder="email@example.com"></div>
+    <div class="field"><label>Name (optional)</label><input id="addName"></div>
+    <div class="field"><label>Source (optional)</label><input id="addSource" placeholder="LinkedIn, referral, etc."></div>
+    <button class="btn" onclick="addSub()">Add</button>
+  `);
+  setTimeout(() => document.getElementById('addEmail').focus(), 100);
+}
+
+async function addSub() {
+  const email = document.getElementById('addEmail').value.trim().toLowerCase();
+  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) { toast('Valid email please'); return; }
+  if (state.subscribers.find(s => s.email === email)) { toast('Already on the list'); closeModal(); return; }
+  state.subscribers.push({
+    id: uid(),
+    email,
+    name: document.getElementById('addName').value.trim(),
+    source: document.getElementById('addSource').value.trim() || 'manual',
+    addedAt: Date.now(),
+    status: 'active',
+  });
+  await saveState();
+  KCC.log('R0', 'sub_added', 1);
+  closeModal();
+  renderSubs();
+  renderDash();
+  toast('Added');
+}
+
+async function removeSub(id) {
+  if (!confirm('Remove subscriber?')) return;
+  state.subscribers = state.subscribers.filter(s => s.id !== id);
+  await saveState();
+  renderSubs(); renderDash();
+  toast('Removed');
+}
+
+function importCSV() {
+  const i = document.createElement('input');
+  i.type = 'file'; i.accept = '.csv,text/csv';
+  i.onchange = async () => {
+    const f = i.files[0]; if (!f) return;
+    const text = await f.text();
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    let added = 0;
+    for (const line of lines) {
+      const parts = line.split(/[,;\t]/).map(p => p.trim().replace(/^"|"$/g, ''));
+      const email = parts.find(p => /^[^@]+@[^@]+\.[^@]+$/.test(p));
+      if (!email) continue;
+      const lower = email.toLowerCase();
+      if (state.subscribers.find(s => s.email === lower)) continue;
+      const name = parts.find(p => p && p !== email && !/@/.test(p)) || '';
+      state.subscribers.push({ id: uid(), email: lower, name, source: 'csv-import', addedAt: Date.now(), status: 'active' });
+      added++;
+    }
+    await saveState();
+    renderSubs(); renderDash();
+    toast(`Imported ${added}`);
+  };
+  i.click();
+}
+
+function exportCSV() {
+  if (!state.subscribers.length) { toast('No subscribers yet'); return; }
+  const rows = [['email', 'name', 'source', 'added_at']].concat(state.subscribers.map(s => [s.email, s.name || '', s.source || '', new Date(s.addedAt).toISOString()]));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `subscribers-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('CSV downloaded');
+}
+
+// ═══════════════════════════════════════════
+// AGENT β · COMPOSE + MARKDOWN
+// ═══════════════════════════════════════════
+function renderCompose() {
+  document.getElementById('cpFromName').value = state.settings.yourName || 'Simon';
+  updatePreview();
+  // Disable send button if no mailer key
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = !state.settings.mailerKey || !state.subscribers.length;
+  if (!state.settings.mailerKey) {
+    document.getElementById('sendStatus').innerHTML = '<div class="warn">Add a mailer API key in Settings to enable sending. Until then, drafts save locally and you can copy the HTML to paste elsewhere.</div>';
+  } else if (!state.subscribers.length) {
+    document.getElementById('sendStatus').innerHTML = '<div class="warn">No subscribers yet · add at least one.</div>';
+  } else {
+    document.getElementById('sendStatus').innerHTML = '<div class="good">Ready · will send via ' + escHTML(state.settings.mailerProvider) + ' to ' + state.subscribers.length + ' subscriber' + (state.subscribers.length === 1 ? '' : 's') + '.</div>';
+  }
+}
+
+// minimal markdown renderer
+function mdRender(md) {
+  let h = String(md || '');
+  h = h.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  h = h.replace(/^### (.*)$/gm, '<h3>$1</h3>');
+  h = h.replace(/^## (.*)$/gm, '<h2>$1</h2>');
+  h = h.replace(/^# (.*)$/gm, '<h1>$1</h1>');
+  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+  h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+  h = h.replace(/^- (.*)$/gm, '<li>$1</li>');
+  h = h.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+  h = h.replace(/\n\n/g, '</p><p>');
+  h = '<p>' + h + '</p>';
+  h = h.replace(/<p>(<h[1-6]>)/g, '$1').replace(/(<\/h[1-6]>)<\/p>/g, '$1');
+  h = h.replace(/<p>(<ul>)/g, '$1').replace(/(<\/ul>)<\/p>/g, '$1');
+  return h;
+}
+
+function updatePreview() {
+  const body = document.getElementById('cpBody').value;
+  document.getElementById('cpPreview').innerHTML = body ? mdRender(body) : '<span class="muted">type something to preview...</span>';
+}
+document.getElementById('cpBody')?.addEventListener('input', () => {
+  clearTimeout(window._previewTo);
+  window._previewTo = setTimeout(updatePreview, 200);
+});
+
+async function saveDraft() {
+  const subject = document.getElementById('cpSubject').value.trim();
+  if (!subject) { toast('Add a subject'); return; }
+  const body = document.getElementById('cpBody').value;
+  state.drafts.push({
+    id: uid(),
+    subject,
+    body,
+    fromName: document.getElementById('cpFromName').value,
+    savedAt: Date.now(),
+  });
+  await saveState();
+  toast('Draft saved');
+}
+
+// ═══════════════════════════════════════════
+// AGENT γ · SEND (BYOM)
+// ═══════════════════════════════════════════
+async function sendViaResend({ from, to, subject, html }) {
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.settings.mailerKey },
+    body: JSON.stringify({ from, to, subject, html })
+  });
+  const d = await r.json();
+  return r.ok ? { ok: true, id: d.id } : { ok: false, error: d.message || d.error?.message || 'unknown' };
+}
+
+async function sendViaPostmark({ from, to, subject, html }) {
+  const r = await fetch('https://api.postmarkapp.com/email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Postmark-Server-Token': state.settings.mailerKey },
+    body: JSON.stringify({ From: from, To: to, Subject: subject, HtmlBody: html })
+  });
+  const d = await r.json();
+  return r.ok ? { ok: true, id: d.MessageID } : { ok: false, error: d.Message || 'unknown' };
+}
+
+async function sendViaMailgun({ from, to, subject, html }) {
+  const domain = state.settings.mailgunDomain;
+  if (!domain) return { ok: false, error: 'mailgun_domain required in settings' };
+  const formData = new URLSearchParams();
+  formData.append('from', from);
+  formData.append('to', to);
+  formData.append('subject', subject);
+  formData.append('html', html);
+  const r = await fetch(`https://api.mailgun.net/v3/${domain}/messages`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Basic ' + btoa('api:' + state.settings.mailerKey) },
+    body: formData
+  });
+  const d = await r.json();
+  return r.ok ? { ok: true, id: d.id } : { ok: false, error: d.message || 'unknown' };
+}
+
+async function sendViaSendGrid({ from, to, subject, html }) {
+  const r = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + state.settings.mailerKey },
+    body: JSON.stringify({
+      personalizations: [{ to: [{ email: to }] }],
+      from: { email: from.match(/<(.+)>/)?.[1] || from, name: from.match(/^(.+)\s*</)?.[1] || '' },
+      subject,
+      content: [{ type: 'text/html', value: html }]
+    })
+  });
+  return r.ok ? { ok: true } : { ok: false, error: 'sendgrid status ' + r.status };
+}
+
+const MAILER_FNS = { resend: sendViaResend, postmark: sendViaPostmark, mailgun: sendViaMailgun, sendgrid: sendViaSendGrid };
+
+async function sendNewsletter() {
+  if (!state.settings.mailerKey) { toast('Add mailer key in Settings'); return; }
+  if (!state.subscribers.length) { toast('No subscribers'); return; }
+  const subject = document.getElementById('cpSubject').value.trim();
+  const body = document.getElementById('cpBody').value;
+  const fromName = document.getElementById('cpFromName').value.trim() || 'Newsletter';
+  const fromEmail = state.settings.yourFromEmail;
+  if (!subject) { toast('Add subject'); return; }
+  if (!body) { toast('Add body'); return; }
+  if (!fromEmail) { toast('Set your from-email in Settings'); return; }
+  if (!confirm(`Send to ${state.subscribers.length} subscriber${state.subscribers.length === 1 ? '' : 's'}?`)) return;
+
+  const from = `${fromName} <${fromEmail}>`;
+  const html = mdRender(body);
+  const wrappedHtml = wrapEmail(html, subject);
+  const sendFn = MAILER_FNS[state.settings.mailerProvider] || sendViaResend;
+
+  document.getElementById('sendStatus').innerHTML = '<div class="good">Sending...</div>';
+  document.getElementById('sendBtn').disabled = true;
+
+  const results = [];
+  let ok = 0, fail = 0;
+  for (const sub of state.subscribers.filter(s => s.status === 'active')) {
+    const res = await sendFn({ from, to: sub.email, subject, html: wrappedHtml });
+    results.push({ email: sub.email, ok: res.ok, error: res.error });
+    if (res.ok) ok++; else fail++;
+    document.getElementById('sendStatus').innerHTML = `<div class="good">Sending... ${ok + fail}/${state.subscribers.length} (${fail} failed)</div>`;
+    await new Promise(r => setTimeout(r, 100)); // gentle rate-limit · ~10/sec
+  }
+  state.sent.push({
+    id: uid(),
+    subject,
+    body,
+    html: wrappedHtml,
+    fromName, from,
+    sentAt: Date.now(),
+    recipientCount: ok,
+    failureCount: fail,
+    results,
+  });
+  await saveState();
+  KCC.log('R4', 'newsletter_sent', ok);
+  try { new BroadcastChannel('fall-signal').postMessage({ source: 'falllist', type: 'sent', subject, recipientCount: ok, ts: Date.now() }); } catch (e) {}
+
+  document.getElementById('sendStatus').innerHTML = `<div class="good">◊ Sent · ${ok} delivered · ${fail} failed.</div>`;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('cpSubject').value = '';
+  document.getElementById('cpBody').value = '';
+  updatePreview();
+  toast(`◊ Sent ${ok}`);
+}
+
+function wrapEmail(htmlBody, subject) {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHTML(subject)}</title></head>
+<body style="font:16px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:24px auto;padding:0 16px;color:#1a1a17;background:#fff">
+<style>h1,h2,h3{font-family:Georgia,serif;line-height:1.25}h1{font-size:28px}h2{font-size:22px}h3{font-size:18px}a{color:#b87d0d}p{margin:0 0 14px}ul{margin:0 0 14px 24px}code{background:#f5f1e8;padding:2px 6px;border-radius:3px;font-family:ui-monospace,monospace;font-size:14px}</style>
+${htmlBody}
+<hr style="margin-top:30px;border:none;border-top:1px solid #ddd"><p style="color:#888;font-size:12px;margin-top:14px">Sent with ◊ FallList · sovereign newsletter · <a href="${location.href.split('?')[0]}?unsubscribe=1">unsubscribe</a></p>
+</body></html>`;
+}
+
+async function testSend() {
+  if (!state.settings.mailerKey) { toast('Add mailer key in Settings'); return; }
+  if (!state.settings.yourFromEmail) { toast('Set your from-email in Settings'); return; }
+  const subject = '[TEST] ' + (document.getElementById('cpSubject').value || 'FallList test');
+  const body = document.getElementById('cpBody').value || '# Test from FallList\n\nThis is a test send.';
+  const fromName = document.getElementById('cpFromName').value || 'Test';
+  const from = `${fromName} <${state.settings.yourFromEmail}>`;
+  const sendFn = MAILER_FNS[state.settings.mailerProvider] || sendViaResend;
+  toast('Sending test...');
+  const res = await sendFn({ from, to: state.settings.yourFromEmail, subject, html: wrapEmail(mdRender(body), subject) });
+  if (res.ok) toast('◊ Test sent to ' + state.settings.yourFromEmail);
+  else toast('Failed: ' + (res.error || 'unknown'));
+}
+
+// ═══════════════════════════════════════════
+// SENT VIEW
+// ═══════════════════════════════════════════
+function renderSent() {
+  const root = document.getElementById('sentList');
+  document.getElementById('sentCount').textContent = state.sent.length;
+  if (!state.sent.length) { root.innerHTML = '<div class="empty"><div class="icon">📤</div><h3 style="color:var(--text)">Nothing sent yet</h3><p>Compose a newsletter and send it to your list.</p></div>'; return; }
+  root.innerHTML = state.sent.sort((a, b) => b.sentAt - a.sentAt).map(e => `
+    <div class="sent-item">
+      <div class="subject">${escHTML(e.subject)}</div>
+      <div class="meta">${new Date(e.sentAt).toLocaleString('en-GB')} · ${e.recipientCount} delivered${e.failureCount ? ' · <span style="color:var(--red)">' + e.failureCount + ' failed</span>' : ''}</div>
+      <div class="actions">
+        <button class="icon-btn" onclick="viewSent('${e.id}')">view</button>
+        <button class="icon-btn" onclick="copyAsHtml('${e.id}')">copy HTML</button>
+      </div>
+    </div>`).join('');
+}
+
+function viewSent(id) {
+  const e = state.sent.find(x => x.id === id);
+  if (!e) return;
+  showModal(e.subject, `
+    <div class="row"><span class="lbl">Sent</span><span>${new Date(e.sentAt).toLocaleString('en-GB')}</span></div>
+    <div class="row"><span class="lbl">Delivered</span><span style="color:var(--green)">${e.recipientCount}</span></div>
+    ${e.failureCount ? `<div class="row"><span class="lbl">Failed</span><span style="color:var(--red)">${e.failureCount}</span></div>` : ''}
+    <div class="row"><span class="lbl">From</span><span>${escHTML(e.from)}</span></div>
+    <h3 style="margin:16px 0 8px">Preview</h3>
+    <div class="draft-preview">${mdRender(e.body)}</div>
+  `);
+}
+
+function copyAsHtml(id) {
+  const e = state.sent.find(x => x.id === id);
+  if (!e) return;
+  navigator.clipboard.writeText(e.html).then(() => toast('HTML copied'));
+}
+
+// ═══════════════════════════════════════════
+// SHARE / BACKUP
+// ═══════════════════════════════════════════
+function renderShare() {
+  // already rendered in HTML
+}
+
+function copyLink(id) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => toast('Copied'));
+}
+
+function copyEmbedCode() {
+  const url = location.href.split('?')[0] + '?signup=1';
+  const embed = `<iframe src="${url}" width="100%" height="280" style="border:0" loading="lazy"></iframe>`;
+  navigator.clipboard.writeText(embed).then(() => toast('iframe copied'));
+}
+
+function exportAll() {
+  const data = JSON.stringify({ exported: new Date().toISOString(), version: VERSION, state }, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `falllist-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('Backup downloaded');
+}
+
+function importAll() {
+  const i = document.createElement('input');
+  i.type = 'file'; i.accept = 'application/json,.json';
+  i.onchange = async () => {
+    const f = i.files[0]; if (!f) return;
+    const text = await f.text();
+    try {
+      const obj = JSON.parse(text);
+      if (obj.state) {
+        if (!confirm('REPLACE all current data?')) return;
+        state = Object.assign(state, obj.state);
+        await saveState();
+        renderDash();
+        toast('Restored');
+      }
+    } catch (e) { toast('Bad backup'); }
+  };
+  i.click();
+}
+
+// ═══════════════════════════════════════════
+// PUBLIC SIGNUP MODE
+// ═══════════════════════════════════════════
+function checkSignupMode() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('signup') === '1') {
+    // Replace UI with simple signup form
+    document.body.innerHTML = `
+      <div style="max-width:520px;margin:60px auto;padding:30px;background:var(--bg-2);border:1px solid var(--line);border-radius:14px">
+        <h1 style="font-family:'Syne';font-weight:800;font-size:24px;color:var(--gold);margin-bottom:8px">${escHTML(state.settings.listName || 'Subscribe')}</h1>
+        <p style="color:var(--muted);margin-bottom:20px">Drop your email to join.</p>
+        <form onsubmit="publicSignup(event)">
+          <input type="email" id="pubEmail" required placeholder="you@example.com" style="width:100%;padding:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:16px;margin-bottom:10px">
+          <input type="text" id="pubName" placeholder="Name (optional)" style="width:100%;padding:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:16px;margin-bottom:14px">
+          <button type="submit" style="width:100%;padding:14px;background:var(--gold);color:#1a1a17;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer">Subscribe</button>
+        </form>
+        <p id="pubMsg" style="margin-top:14px;text-align:center;color:var(--muted);font-size:13px"></p>
+        <p style="margin-top:30px;text-align:center;color:var(--muted);font-size:11px">◊·κ=1 · FallList · sovereign newsletter · no third-party tracking</p>
+      </div>
+    `;
+    return true;
+  }
+  return false;
+}
+
+window.publicSignup = async function(e) {
+  e.preventDefault();
+  const email = document.getElementById('pubEmail').value.trim().toLowerCase();
+  const name = document.getElementById('pubName').value.trim();
+  if (!email) return;
+  if (state.subscribers.find(s => s.email === email)) {
+    document.getElementById('pubMsg').textContent = "You're already on the list. ◊";
+    return;
+  }
+  state.subscribers.push({
+    id: uid(), email, name, source: 'public-signup',
+    addedAt: Date.now(), status: 'active'
+  });
+  await saveState();
+  try { new BroadcastChannel('fall-signal').postMessage({ source: 'falllist', type: 'subscribed', email, ts: Date.now() }); } catch (er) {}
+  document.getElementById('pubMsg').textContent = '◊ You\'re in. Welcome.';
+  document.getElementById('pubEmail').value = '';
+  document.getElementById('pubName').value = '';
+};
+
+// ═══════════════════════════════════════════
+// MODAL · SETTINGS
+// ═══════════════════════════════════════════
+function showModal(title, body) {
+  document.getElementById('modalTitle').textContent = title;
+  document.getElementById('modalBody').innerHTML = body;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+document.getElementById('btnSettings').addEventListener('click', () => {
+  showModal('Settings', `
+    <div class="field"><label>Your name (default from-name)</label><input id="stName" value="${escHTML(state.settings.yourName)}"></div>
+    <div class="field"><label>From email (must be verified with mailer)</label><input id="stFromEmail" type="email" value="${escHTML(state.settings.yourFromEmail)}" placeholder="you@yourdomain.com"></div>
+    <div class="field"><label>List name (shown on signup page)</label><input id="stListName" value="${escHTML(state.settings.listName)}"></div>
+
+    <h3 style="margin:18px 0 8px">BYOM · bring your own mailer</h3>
+    <p class="muted" style="font-size:12px;margin-bottom:8px">FallList doesn't run a server. You pay your mailer direct (Resend free tier 3,000/mo · others ~£1 per 1,000 emails). No middleman cut.</p>
+    <div class="field"><label>Provider</label>
+      <select id="stProvider">
+        <option value="resend" ${state.settings.mailerProvider==='resend'?'selected':''}>Resend (easiest · 3k free/mo)</option>
+        <option value="postmark" ${state.settings.mailerProvider==='postmark'?'selected':''}>Postmark (best deliverability)</option>
+        <option value="mailgun" ${state.settings.mailerProvider==='mailgun'?'selected':''}>Mailgun (cheap at scale)</option>
+        <option value="sendgrid" ${state.settings.mailerProvider==='sendgrid'?'selected':''}>SendGrid (enterprise)</option>
+      </select>
+    </div>
+    <div class="field"><label>API key</label><input id="stMailerKey" type="password" value="${escHTML(state.settings.mailerKey)}" placeholder="paste · stays on this device"></div>
+    <div class="field" id="mgDomainField" style="${state.settings.mailerProvider === 'mailgun' ? '' : 'display:none'}">
+      <label>Mailgun domain (if using Mailgun)</label>
+      <input id="stMailgunDomain" value="${escHTML(state.settings.mailgunDomain)}" placeholder="mg.yourdomain.com">
+    </div>
+
+    <h3 style="margin:18px 0 8px">AI keys (optional · for smart subject lines later)</h3>
+    <div class="field"><label>Anthropic</label><input id="stAnthropic" type="password" value="${escHTML(state.settings.anthropicKey)}"></div>
+    <div class="field"><label>Gemini · free</label><input id="stGemini" type="password" value="${escHTML(state.settings.geminiKey)}"></div>
+
+    <div style="margin-top:20px;text-align:center;color:var(--muted);font-size:11px">
+      FallList · v${VERSION} · ◊·κ=1 · prime ${PRIME}<br>
+      your list · your terms · 0% fee
+    </div>
+    <div style="margin-top:14px"><button class="btn" onclick="saveSettings()">Save</button></div>
+  `);
+  setTimeout(() => {
+    document.getElementById('stProvider').addEventListener('change', e => {
+      document.getElementById('mgDomainField').style.display = e.target.value === 'mailgun' ? '' : 'none';
+    });
+  }, 50);
+});
+
+async function saveSettings() {
+  state.settings.yourName = document.getElementById('stName').value || 'Simon';
+  state.settings.yourFromEmail = document.getElementById('stFromEmail').value;
+  state.settings.listName = document.getElementById('stListName').value || 'My Newsletter';
+  state.settings.mailerProvider = document.getElementById('stProvider').value;
+  state.settings.mailerKey = document.getElementById('stMailerKey').value;
+  state.settings.mailgunDomain = document.getElementById('stMailgunDomain')?.value || '';
+  state.settings.anthropicKey = document.getElementById('stAnthropic').value;
+  state.settings.geminiKey = document.getElementById('stGemini').value;
+  Cascade._localProbed = undefined;
+  await saveState();
+  await updateTierBadge();
+  closeModal();
+  if (document.getElementById('view-compose').classList.contains('active')) renderCompose();
+  toast('Saved');
+}
+
+async function updateTierBadge() {
+  const tier = await Cascade.detectTier();
+  document.getElementById('btnTier').textContent = tier === 'T0' ? 'offline' : tier;
+}
+
+// ═══ KONOMI ═══
+window.KONOMI = { active: true, tier: 'sovereign', check: () => ({ ok: true, tier: 'sovereign' }) };
+
+// ═══ FALLMESH ═══
+try {
+  const sig = new BroadcastChannel('fall-signal');
+  sig.postMessage({ source: 'falllist', type: 'hello', prime: PRIME, version: VERSION, ts: Date.now() });
+  sig.addEventListener('message', e => {
+    const m = e.data;
+    if (m && m.type === 'ping') sig.postMessage({ source: 'falllist', type: 'pong', prime: PRIME });
+  });
+} catch (e) {}
+
+// ═══ postMessage API ═══
+window.addEventListener('message', async (e) => {
+  const m = e.data;
+  if (!m || m.target !== 'falllist' || !m.action) return;
+  let resp = null;
+  if (m.action === 'ping') resp = { ok: true, prime: PRIME, version: VERSION };
+  else if (m.action === 'subscriber_count') resp = { count: state.subscribers.length };
+  else if (m.action === 'sent_count') resp = { count: state.sent.length };
+  e.source?.postMessage({ target: m.source || '*', responseTo: m.action, data: resp }, '*');
+});
+
+// ═══ BOOT ═══
+(async function init() {
+  await loadState();
+  await updateTierBadge();
+  if (checkSignupMode()) return;
+  renderDash();
+})();
+</script>
+</body>
+</html>
