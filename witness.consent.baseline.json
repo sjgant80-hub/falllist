@@ -1,0 +1,8 @@
+[
+  {
+    "line": 189,
+    "mutation": "&& → ||",
+    "snippet": "const o = (opts && typeof opts === 'object') ? opts : {};",
+    "reason": "Equivalent. This normalises the options bag in unsubscribe(). The two versions differ only for a value that is truthy but not an object — a string, a number, true, a function. In the original those become {}; in the mutant they are kept as-is. Either way the next two lines read o.as and o.reason off the value, and none of those types carries either property, so both yield undefined: the status falls back to UNSUBSCRIBED and the reason to ''. There is no input that produces a different subscriber list. The behaviour that matters — that an absent options bag still records a plain unsubscribe, and that an explicit as/reason is honoured — is asserted in sections 1 and 9."
+  }
+]

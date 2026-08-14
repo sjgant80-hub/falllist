@@ -1,0 +1,37 @@
+name: gate
+on: [push, workflow_dispatch]
+jobs:
+  witness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: proof-of-play — getting off the list
+        run: node consent.test.mjs
+
+      # ⚑ Pinned. An unpinned gate is a gate somebody else can change.
+      - name: witness — try to break the tests
+        run: |
+          git clone --depth 1 --branch v0.2 https://github.com/sjgant80-hub/witness.git /tmp/witness
+          node /tmp/witness/witness.mjs mutate consent.mjs \
+            --cap 400 \
+            --baseline witness.consent.baseline.json \
+            --test "node consent.test.mjs"
+
+      - name: the shipped page still matches the gated kernel
+        run: |
+          cp index.html /tmp/shipped.html
+          node build-page.mjs
+          diff -q /tmp/shipped.html index.html || {
+            echo "::error::index.html has drifted from consent.mjs — run build-page.mjs and commit."
+            exit 1
+          }
+
+      # ⚑ The link in every email must never point back at the dead handler again.
+      - name: the unsubscribe link is handled
+        run: |
+          grep -q "checkUnsubscribeMode" index.html || { echo "::error::no unsubscribe handler"; exit 1; }
+          grep -q "unsubscribe=1\"" index.html && { echo "::error::the dead ?unsubscribe=1 link is back"; exit 1; }
+          echo "ok"

@@ -402,16 +402,15 @@ function addSubModal() {
 
 async function addSub() {
   const email = document.getElementById('addEmail').value.trim().toLowerCase();
-  if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) { toast('Valid email please'); return; }
-  if (state.subscribers.find(s => s.email === email)) { toast('Already on the list'); closeModal(); return; }
-  state.subscribers.push({
+  const r = CONSENT.addSubscriber(state.subscribers, {
     id: uid(),
     email,
     name: document.getElementById('addName').value.trim(),
     source: document.getElementById('addSource').value.trim() || 'manual',
-    addedAt: Date.now(),
-    status: 'active',
-  });
+  }, Date.now(), { requireConfirm: state.settings.confirmDoubleOptIn === true });
+  // ⚑ Refused if they once asked to be taken off. Typing an address in by hand is not their consent.
+  if (!r.ok) { toast(r.reason); if (!r.suppressed) closeModal(); return; }
+  state.subscribers = r.subscribers;
   await saveState();
   KCC.log('R0', 'sub_added', 1);
   closeModal();
@@ -420,12 +419,17 @@ async function addSub() {
   toast('Added');
 }
 
+// ⚑ THIS USED TO DELETE THE ROW. Deleting is not unsubscribing: the next import adds them straight
+// back, and the first thing they get is the mail they asked to stop. The record stays as a tombstone.
 async function removeSub(id) {
-  if (!confirm('Remove subscriber?')) return;
-  state.subscribers = state.subscribers.filter(s => s.id !== id);
+  const who = state.subscribers.find(s => s.id === id);
+  if (!confirm(`Take ${who ? who.email : 'this subscriber'} off the list?\n\nThey stay on record as unsubscribed, so an import cannot add them back.`)) return;
+  const r = CONSENT.unsubscribe(state.subscribers, id, Date.now(), { reason: 'removed by sender' });
+  if (!r.ok) { toast(r.reason); return; }
+  state.subscribers = r.subscribers;
   await saveState();
   renderSubs(); renderDash();
-  toast('Removed');
+  toast(r.already ? 'Already off the list' : 'Unsubscribed');
 }
 
 function importCSV() {
@@ -435,20 +439,23 @@ function importCSV() {
     const f = i.files[0]; if (!f) return;
     const text = await f.text();
     const lines = text.split(/\r?\n/).filter(l => l.trim());
-    let added = 0;
+    let added = 0, blocked = 0;
     for (const line of lines) {
       const parts = line.split(/[,;\t]/).map(p => p.trim().replace(/^"|"$/g, ''));
       const email = parts.find(p => /^[^@]+@[^@]+\.[^@]+$/.test(p));
       if (!email) continue;
-      const lower = email.toLowerCase();
-      if (state.subscribers.find(s => s.email === lower)) continue;
       const name = parts.find(p => p && p !== email && !/@/.test(p)) || '';
-      state.subscribers.push({ id: uid(), email: lower, name, source: 'csv-import', addedAt: Date.now(), status: 'active' });
+      // ⚑ THE IMPORT CANNOT UNDO AN UNSUBSCRIBE. This is the path that used to bring people back:
+      // the same till list, the same signup sheet, re-imported, and the first thing they get is the
+      // mail they asked to stop.
+      const r = CONSENT.addSubscriber(state.subscribers, { id: uid(), email, name, source: 'csv-import' }, Date.now());
+      if (!r.ok) { if (r.suppressed) blocked++; continue; }
+      state.subscribers = r.subscribers;
       added++;
     }
     await saveState();
     renderSubs(); renderDash();
-    toast(`Imported ${added}`);
+    toast(blocked ? `Imported ${added} · ${blocked} skipped (they asked to be taken off)` : `Imported ${added}`);
   };
   i.click();
 }
@@ -594,7 +601,11 @@ async function sendNewsletter() {
   if (!subject) { toast('Add subject'); return; }
   if (!body) { toast('Add body'); return; }
   if (!fromEmail) { toast('Set your from-email in Settings'); return; }
-  if (!confirm(`Send to ${state.subscribers.length} subscriber${state.subscribers.length === 1 ? '' : 's'}?`)) return;
+  // ⚑ "Send to 4 subscribers?" counted the whole list — including everyone it would not send to.
+  const plan = CONSENT.sendSummary(state.subscribers);
+  if (plan.sending === 0) { toast('Nobody on this list can be sent to'); return; }
+  if (!confirm(`Send to ${plan.sending} subscriber${plan.sending === 1 ? '' : 's'}?` +
+    (plan.suppressed ? `\n\n${plan.suppressed} suppressed (unsubscribed or bounced) will be skipped.` : ''))) return;
 
   const from = `${fromName} <${fromEmail}>`;
   const html = mdRender(body);
@@ -606,11 +617,17 @@ async function sendNewsletter() {
 
   const results = [];
   let ok = 0, fail = 0;
-  for (const sub of state.subscribers.filter(s => s.status === 'active')) {
-    const res = await sendFn({ from, to: sub.email, subject, html: wrappedHtml });
+  // ⚑ ONE GATE. recipientsOf() is the only thing that decides who gets mail — and it de-duplicates,
+  // so the same address entered twice in different case gets one email rather than two.
+  const recipients = CONSENT.recipientsOf(state.subscribers);
+  for (const sub of recipients) {
+    // ⚑ Each person's unsubscribe link carries their OWN token. One shared ?unsubscribe=1 could not
+    // have told the app who was asking.
+    const personalHtml = wrapEmail(mdRender(body), subject, CONSENT.unsubTokenOf(sub));
+    const res = await sendFn({ from, to: sub.email, subject, html: personalHtml });
     results.push({ email: sub.email, ok: res.ok, error: res.error });
     if (res.ok) ok++; else fail++;
-    document.getElementById('sendStatus').innerHTML = `<div class="good">Sending... ${ok + fail}/${state.subscribers.length} (${fail} failed)</div>`;
+    document.getElementById('sendStatus').innerHTML = `<div class="good">Sending... ${ok + fail}/${recipients.length} (${fail} failed)</div>`;
     await new Promise(r => setTimeout(r, 100)); // gentle rate-limit · ~10/sec
   }
   state.sent.push({
@@ -636,12 +653,15 @@ async function sendNewsletter() {
   toast(`◊ Sent ${ok}`);
 }
 
-function wrapEmail(htmlBody, subject) {
+function wrapEmail(htmlBody, subject, unsubToken) {
+  // No token means we could not make a private link for this person — see unsubTokenOf. The bare
+  // link still works: it asks them for their address rather than guessing who they are.
+  const unsubUrl = location.href.split('?')[0] + '?unsubscribe=' + encodeURIComponent(unsubToken || 'ask');
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${escHTML(subject)}</title></head>
 <body style="font:16px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:24px auto;padding:0 16px;color:#1a1a17;background:#fff">
 <style>h1,h2,h3{font-family:Georgia,serif;line-height:1.25}h1{font-size:28px}h2{font-size:22px}h3{font-size:18px}a{color:#b87d0d}p{margin:0 0 14px}ul{margin:0 0 14px 24px}code{background:#f5f1e8;padding:2px 6px;border-radius:3px;font-family:ui-monospace,monospace;font-size:14px}</style>
 ${htmlBody}
-<hr style="margin-top:30px;border:none;border-top:1px solid #ddd"><p style="color:#888;font-size:12px;margin-top:14px">Sent with ◊ FallList · sovereign newsletter · <a href="${location.href.split('?')[0]}?unsubscribe=1">unsubscribe</a></p>
+<hr style="margin-top:30px;border:none;border-top:1px solid #ddd"><p style="color:#888;font-size:12px;margin-top:14px">Sent with ◊ FallList · sovereign newsletter · <a href="${unsubUrl}">unsubscribe</a></p>
 </body></html>`;
 }
 
@@ -745,9 +765,337 @@ function importAll() {
   i.click();
 }
 
+// ════════════════════════════════════════════════════════════════
+// THE GATED CONSENT KERNEL — inlined verbatim by build-page.mjs from consent.mjs.
+// Do not edit between the markers: edit consent.mjs, re-run the gate, rebuild the page.
+// ════════════════════════════════════════════════════════════════
+const CONSENT = (function () {
+/* __CONSENT_KERNEL__ */
+// consent.mjs — nobody could get off this list.
+//
+// ⚑ WHAT WAS MISSING. Every email falllist sends carries an unsubscribe link in its footer, and
+// nothing on the other end reads it. `checkSignupMode()` handles `?signup=1` and nothing handles
+// `?unsubscribe=1` — clicking it opened the sender's own admin app. A visible unsubscribe link that
+// does nothing is worse than no link: the person believes they have left, keeps receiving the emails,
+// and the sender never learns they wanted out.
+//
+// ⚑ AND THE LINK COULD NOT HAVE WORKED ANYWAY. `?unsubscribe=1` names nobody. A person clicking it
+// says only "somebody wants off", so the link needs the subscriber's own token in it.
+//
+// ⚑ AND `status: 'active'` WAS THE ONLY STATUS. It is written in three places and changed in none,
+// while sendNewsletter() filters for the ones whose status is active — a filter over a field that
+// cannot vary. The code looks like it honours a lifecycle it does not have.
+//
+// ⚑ THE ONE THAT MATTERS MOST: DELETING IS NOT UNSUBSCRIBING. The only way off the list was
+// removeSub(), which deletes the row. Delete the row and the next CSV import — from the same shop
+// till, the same event signup sheet — adds them straight back, and the first thing they get is the
+// mail they asked to stop. A withdrawal of consent must OUTLIVE the record it was withdrawn from.
+// That is the whole reason a suppression list exists, and it is the one thing this tool did not have.
+//
+// Pure: no clock, no storage, no network. The caller passes `now`.
+
+const ACTIVE = 'active';
+const PENDING = 'pending';             // asked to join, has not confirmed — double opt-in
+const UNSUBSCRIBED = 'unsubscribed';   // asked to leave. permanent unless THEY come back
+const BOUNCED = 'bounced';             // the address does not exist
+const COMPLAINED = 'complained';       // reported the mail as spam. hardest stop of all
+
+/** Statuses that must never receive another send. Complained is here for a legal reason, not a tidy one. */
+const SILENT = new Set([UNSUBSCRIBED, BOUNCED, COMPLAINED]);
+
+/**
+ * One address, one spelling.
+ *
+ * ⚑ `Foo@Bar.com` and `foo@bar.com` are the same person, and a list that thinks otherwise emails them
+ * twice and then honours their unsubscribe only once. Trim and lowercase — nothing cleverer. Stripping
+ * dots or +tags is a Gmail habit that silently merges two different people at most other providers.
+ */
+function normalizeEmail(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+}
+
+/**
+ * Deliberately loose. Guessing at exotic-but-valid addresses rejects real people.
+ *
+ * The 254 is the real limit an address can be delivered to. A minimum-length check sat here too,
+ * until the gate showed that loosening it by one changed nothing — the pattern below already needs
+ * five characters, so the check could never fire. A guard that cannot fail is not protecting anything.
+ */
+function isEmail(value) {
+  const e = normalizeEmail(value);
+  return e.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+}
+
+/** The status of a record, defaulting to active only for a record that plainly is one. */
+function statusOf(sub) {
+  if (!sub || typeof sub !== 'object') return null;
+  const s = typeof sub.status === 'string' ? sub.status.trim().toLowerCase() : '';
+  if (s === '') return ACTIVE;                       // written before statuses existed
+  return s;
+}
+
+/**
+ * ⚑ THE ONE GATE. Everything that sends must ask this and nothing else.
+ *
+ * Unknown statuses are treated as DO NOT SEND. A status this kernel has never heard of arrived from
+ * somewhere — a future version, a hand-edited export — and the safe reading of "I do not understand
+ * this person's wishes" is silence.
+ */
+function canSend(sub) {
+  const s = statusOf(sub);
+  if (s === null) return false;
+  if (!isEmail(sub.email)) return false;
+  return s === ACTIVE;
+}
+
+/**
+ * Who a send actually goes to — deduplicated by address.
+ *
+ * ⚑ A CSV import adds the same person again under a different spelling, and without this they get
+ * every newsletter twice from a list that shows them once.
+ */
+function recipientsOf(subscribers) {
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  const seen = new Set();
+  const out = [];
+  for (const sub of list) {
+    if (!canSend(sub)) continue;
+    const e = normalizeEmail(sub.email);
+    if (seen.has(e)) continue;
+    seen.add(e);
+    out.push(sub);
+  }
+  return out;
+}
+
+/** Everyone who must never be mailed again, as bare addresses. This IS the suppression list. */
+function suppressed(subscribers) {
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  const out = new Set();
+  for (const sub of list) {
+    // No guard needed for garbage rows: statusOf() answers null for anything that is not a record,
+    // and null is not a silent status. A second guard saying the same thing is one the gate can
+    // rewrite either way without a test noticing.
+    if (SILENT.has(statusOf(sub))) out.add(normalizeEmail(sub.email));
+  }
+  out.delete('');
+  return out;
+}
+
+/** Find one record by address, whatever it was capitalised as. */
+function findByEmail(subscribers, email) {
+  const e = normalizeEmail(email);
+  if (!e) return null;
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  return list.find(s => s && typeof s === 'object' && normalizeEmail(s.email) === e) || null;
+}
+
+/**
+ * The token that goes in the unsubscribe link.
+ *
+ * ⚑ AND IT REFUSES A GUESSABLE ONE. If ids are `1`, `2`, `3`, then `?unsubscribe=4` unsubscribes a
+ * stranger, and one bored recipient can empty the whole list. Rather than invent randomness in a pure
+ * kernel, this REFUSES to build a link out of an id too short or too orderly to be private, so the
+ * fault surfaces at the sender rather than at the victim.
+ */
+function unsubTokenOf(sub) {
+  const id = sub && sub.id != null ? String(sub.id) : '';
+  if (id.length < 8) return null;                    // a counter, or nothing at all
+  if (/^\d+$/.test(id)) return null;                 // digits only is a counter however long
+  return id;
+}
+
+function findByToken(subscribers, token) {
+  const t = typeof token === 'string' ? token.trim() : '';
+  if (t.length < 8 || /^\d+$/.test(t)) return null;  // never honour a token we would not have issued
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  return list.find(s => s && typeof s === 'object' && String(s.id) === t) || null;
+}
+
+/**
+ * ⚑ UNSUBSCRIBE MARKS, IT NEVER DELETES. The tombstone is the point: it is what stops the next import
+ * putting them back. Returns a NEW list.
+ *
+ * Unsubscribing somebody who is not on the list still records the tombstone, because that is exactly
+ * the case that matters — a forwarded email, an address on a sheet about to be imported.
+ */
+function unsubscribe(subscribers, emailOrToken, now, opts) {
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  const o = (opts && typeof opts === 'object') ? opts : {};
+  const status = SILENT.has(o.as) ? o.as : UNSUBSCRIBED;
+  const t = timeOrNull(now);
+
+  const found = findByToken(list, emailOrToken) || findByEmail(list, emailOrToken);
+  if (found) {
+    if (SILENT.has(statusOf(found))) {
+      return { ok: true, already: true, reason: 'already off the list', subscribers: list };
+    }
+    return {
+      ok: true, already: false, reason: 'taken off the list',
+      subscribers: list.map(s => s === found
+        ? { ...s, status, unsubscribedAt: t, unsubscribeReason: reasonText(o.reason) }
+        : s),
+    };
+  }
+
+  const email = normalizeEmail(emailOrToken);
+  if (!isEmail(email)) return { ok: false, already: false, reason: 'that is not an address we can act on', subscribers: list };
+
+  // Not on the list, but the tombstone still has to exist or an import will add them.
+  return {
+    ok: true, already: false, reason: 'taken off the list',
+    subscribers: [...list, {
+      id: null, email, name: '', source: 'unsubscribe-link',
+      addedAt: t, status, unsubscribedAt: t, unsubscribeReason: reasonText(o.reason),
+    }],
+  };
+}
+
+/**
+ * ⚑ ADDING SOMEBODY CANNOT UNDO THEIR LEAVING. This is the rule the whole file exists for. An import,
+ * a signup form filled in by somebody else, a re-typed address at a till — none of them may bring a
+ * suppressed person back. Only the person themselves can, through resubscribe().
+ */
+function addSubscriber(subscribers, candidate, now, opts) {
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  const o = (opts && typeof opts === 'object') ? opts : {};
+  const c = (candidate && typeof candidate === 'object') ? candidate : {};
+  const email = normalizeEmail(c.email);
+  const t = timeOrNull(now);
+
+  if (!isEmail(email)) return { ok: false, reason: 'that is not a real email address', subscribers: list };
+
+  const existing = findByEmail(list, email);
+  if (existing) {
+    const s = statusOf(existing);
+    if (SILENT.has(s)) {
+      return {
+        ok: false,
+        reason: s === UNSUBSCRIBED
+          ? 'that address asked to be taken off this list'
+          : `that address is suppressed (${s})`,
+        suppressed: true,
+        subscribers: list,
+      };
+    }
+    return { ok: false, reason: 'already on the list', subscribers: list };
+  }
+
+  const status = o.requireConfirm === true ? PENDING : ACTIVE;
+  return {
+    ok: true, reason: status === PENDING ? 'confirmation needed' : 'added',
+    subscribers: [...list, { ...c, email, addedAt: t, status }],
+  };
+}
+
+/**
+ * Somebody who left, coming back of their own accord.
+ *
+ * ⚑ Guarded by an explicit `byPerson`, because the whole value of the suppression list is that no
+ * amount of importing can clear it. Making the exception loud is what keeps it from being used by
+ * accident. A complaint is never reversed here at all — that one is not the sender's to undo.
+ */
+function resubscribe(subscribers, email, now, opts) {
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  const o = (opts && typeof opts === 'object') ? opts : {};
+  if (o.byPerson !== true) {
+    return { ok: false, reason: 'only the person themselves can rejoin a list they left', subscribers: list };
+  }
+  const found = findByEmail(list, email);
+  if (!found) return { ok: false, reason: 'not on the list', subscribers: list };
+  if (statusOf(found) === COMPLAINED) {
+    return { ok: false, reason: 'that address reported this list as spam and cannot be re-added here', subscribers: list };
+  }
+  return {
+    ok: true, reason: 'back on the list',
+    subscribers: list.map(s => s === found
+      ? { ...s, status: ACTIVE, resubscribedAt: timeOrNull(now), unsubscribedAt: null }
+      : s),
+  };
+}
+
+/** A bounced address is suppressed the same way — the difference is only in what it tells the sender. */
+function markBounced(subscribers, email, now) {
+  return unsubscribe(subscribers, email, now, { as: BOUNCED, reason: 'delivery failed' });
+}
+
+/** What the sender is about to do, before they do it. */
+function sendSummary(subscribers) {
+  const list = Array.isArray(subscribers) ? subscribers : [];
+  const to = recipientsOf(list);
+  // ⚑ A row that is not a record is COUNTED, as unreadable. Skipping it made the breakdown add up to
+  // less than the total, and a sender reading "412 subscribers" over a breakdown of 409 has no way to
+  // know the three missing ones exist, let alone that they will never be mailed.
+  const counts = {};
+  for (const sub of list) {
+    const s = statusOf(sub) || 'unreadable';
+    counts[s] = (counts[s] || 0) + 1;
+  }
+  return { total: list.length, sending: to.length, suppressed: suppressed(list).size, byStatus: counts };
+}
+
+function timeOrNull(now) {
+  const n = Number(now);
+  return Number.isFinite(n) ? n : null;
+}
+
+function reasonText(value) {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, 200) : '';
+}
+
+
+/* __END_CONSENT_KERNEL__ */
+return { ACTIVE, PENDING, UNSUBSCRIBED, BOUNCED, COMPLAINED, normalizeEmail, isEmail, statusOf,
+  canSend, recipientsOf, suppressed, findByEmail, findByToken, unsubTokenOf, unsubscribe,
+  addSubscriber, resubscribe, markBounced, sendSummary };
+})();
+
 // ═══════════════════════════════════════════
-// PUBLIC SIGNUP MODE
+// PUBLIC SIGNUP + UNSUBSCRIBE MODE
 // ═══════════════════════════════════════════
+
+// ⚑ THE LINK IN EVERY EMAIL NOW LANDS SOMEWHERE. It used to open the sender's own admin app.
+function checkUnsubscribeMode() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get('unsubscribe');
+  if (!token) return false;
+
+  // A token identifies one person. Without a usable one — an old ?unsubscribe=1 link, a forwarded
+  // email, a record whose id was never private enough to put in a URL — we ask for the address
+  // instead. Asking is better than the wrong person being removed, and better than nobody being able to.
+  const known = CONSENT.findByToken(state.subscribers, token);
+  const shell = (inner) => `<div style="max-width:520px;margin:60px auto;padding:30px;background:var(--bg-2);border:1px solid var(--line);border-radius:14px">
+    <h1 style="font-family:'Syne';font-weight:800;font-size:24px;color:var(--gold);margin-bottom:8px">${escHTML(state.settings.listName || 'Unsubscribe')}</h1>${inner}
+    <p style="margin-top:30px;text-align:center;color:var(--muted);font-size:11px">◊·κ=1 · FallList · sovereign newsletter · no third-party tracking</p></div>`;
+
+  document.body.innerHTML = shell(known
+    ? `<p style="color:var(--muted);margin-bottom:20px">Take <b>${escHTML(known.email)}</b> off this list?</p>
+       <button onclick="doUnsub('${escHTML(String(known.id))}')" style="width:100%;padding:14px;background:var(--gold);color:#1a1a17;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer">Unsubscribe me</button>
+       <p id="unsubMsg" style="margin-top:14px;text-align:center;color:var(--muted);font-size:13px"></p>`
+    : `<p style="color:var(--muted);margin-bottom:20px">Type the address you want taken off this list.</p>
+       <form onsubmit="doUnsub(event)">
+         <input type="email" id="unsubEmail" required placeholder="you@example.com" style="width:100%;padding:14px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);font-size:16px;margin-bottom:10px">
+         <button type="submit" style="width:100%;padding:14px;background:var(--gold);color:#1a1a17;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer">Unsubscribe me</button>
+       </form>
+       <p id="unsubMsg" style="margin-top:14px;text-align:center;color:var(--muted);font-size:13px"></p>`);
+  return true;
+}
+
+window.doUnsub = async function (arg) {
+  let key = arg;
+  if (arg && typeof arg === 'object') { arg.preventDefault(); key = document.getElementById('unsubEmail').value; }
+  const r = CONSENT.unsubscribe(state.subscribers, key, Date.now(), { reason: 'unsubscribe link' });
+  const msg = document.getElementById('unsubMsg');
+  if (!r.ok) { msg.textContent = r.reason; return; }
+  state.subscribers = r.subscribers;
+  await saveState();
+  // ⚑ The suppression is written even for somebody who was never on the list, so the next import
+  // cannot add them. That is the whole reason this marks rather than deletes.
+  msg.innerHTML = '<span style="color:var(--gold)">◊ Done. You will not get any more of these.</span>';
+  // Hide the way back in, so a second click cannot look like it failed. The message stays.
+  document.querySelectorAll('button,input,form').forEach(el => { el.disabled = true; el.style.display = 'none'; });
+};
 function checkSignupMode() {
   const params = new URLSearchParams(location.search);
   if (params.get('signup') === '1') {
@@ -775,14 +1123,20 @@ window.publicSignup = async function(e) {
   const email = document.getElementById('pubEmail').value.trim().toLowerCase();
   const name = document.getElementById('pubName').value.trim();
   if (!email) return;
-  if (state.subscribers.find(s => s.email === email)) {
+  const r = CONSENT.addSubscriber(state.subscribers, { id: uid(), email, name, source: 'public-signup' },
+    Date.now(), { requireConfirm: state.settings.confirmDoubleOptIn === true });
+  if (!r.ok) {
+    // Somebody who left and is signing up again of their own accord is the one case that may rejoin.
+    if (r.suppressed) {
+      const back = CONSENT.resubscribe(state.subscribers, email, Date.now(), { byPerson: true });
+      if (back.ok) { state.subscribers = back.subscribers; await saveState(); document.getElementById('pubMsg').textContent = '◊ Welcome back.'; return; }
+      document.getElementById('pubMsg').textContent = back.reason;
+      return;
+    }
     document.getElementById('pubMsg').textContent = "You're already on the list. ◊";
     return;
   }
-  state.subscribers.push({
-    id: uid(), email, name, source: 'public-signup',
-    addedAt: Date.now(), status: 'active'
-  });
+  state.subscribers = r.subscribers;
   await saveState();
   try { new BroadcastChannel('fall-signal').postMessage({ source: 'falllist', type: 'subscribed', email, ts: Date.now() }); } catch (er) {}
   document.getElementById('pubMsg').textContent = '◊ You\'re in. Welcome.';
@@ -890,6 +1244,7 @@ window.addEventListener('message', async (e) => {
 (async function init() {
   await loadState();
   await updateTierBadge();
+  if (checkUnsubscribeMode()) return;
   if (checkSignupMode()) return;
   renderDash();
 })();
