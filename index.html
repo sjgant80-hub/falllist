@@ -883,7 +883,7 @@ footer a { color: var(--gold); text-decoration: none; }
             ${tab==='stt'   ? modalityBlock('stt',   STT_PROVIDERS,   sttP,  getKey('stt',   sttP),  getModel('stt',   sttP,   STT_PROVIDERS))   : ''}
           </div>
           <label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px;font-size:12px;color:#ebe3d2;cursor:pointer"><input type="checkbox" id="fk-remember"${STATE.config.remember_keys===true?' checked':''} style="margin-top:2px"> Remember my keys on this device</label>
-          <div style="font-size:11px;color:#a14a2a;line-height:1.55;margin:4px 0 0 22px">Every estate page at this web address shares this browser’s storage, so a remembered key can be read by any of them. Leave it off and your keys are held in this tab only: close it and they are gone.</div>
+          <div style="font-size:11px;color:#a14a2a;line-height:1.55;margin:4px 0 0 22px">Every app page at this web address shares this browser’s storage, so a remembered key can be read by any of them. Leave it off and your keys are held in this tab only: close it and they are gone.</div>
           <button id="fk-forget" style="margin-top:10px;padding:6px 12px;background:transparent;color:#a89e88;border:1px solid #3a342c;border-radius:3px;font-size:11px;cursor:pointer;font-family:inherit">Forget my keys</button>
         </div>
 
@@ -976,7 +976,7 @@ footer a { color: var(--gold); text-decoration: none; }
           <tr><td style="padding:6px 10px;border-top:1px solid #2a2934;color:#c08a3a;font-weight:600">T3</td><td style="padding:6px 10px;border-top:1px solid #2a2934;color:#a89e88">BYOK · 12 text providers (Claude, GPT, Gemini, Groq, Cerebras, DeepSeek, OpenRouter, Mistral, Cohere, Together, HuggingFace, Grok) · 7 image (fal, HF, Replicate, DALL-E, Imagen, Ideogram, Leonardo, Aurora) · 5 video (fal, Luma, Runway, Pika, Kling) · 4 TTS (ElevenLabs, OpenAI, PlayHT, Cartesia) · 3 STT (Deepgram, AssemblyAI, Whisper). You bring keys, you pay direct. Keys are held in this tab only, unless you choose to remember them on this device. The same opening is sent first every time, so a provider that caches can reuse its reading of it.</td></tr>
         </tbody>
       </table>
-      <p style="font-size:12px;color:#6e6a5e;line-height:1.6;margin-top:10px">Open the AI chip in the header to switch tier or check status. Cross-seed mesh activates a BroadcastChannel on <code style="background:#1a1922;padding:1px 5px;border-radius:2px">${MESH_CHANNEL}</code> so other estate seeds on the same device discover this one.</p>
+      <p style="font-size:12px;color:#6e6a5e;line-height:1.6;margin-top:10px">Open the AI chip in the header to switch tier or check status. Cross-seed mesh activates a BroadcastChannel on <code style="background:#1a1922;padding:1px 5px;border-radius:2px">${MESH_CHANNEL}</code> so other Fall apps open on the same device can find this one.</p>
     </div>`;
   }
 
@@ -1236,7 +1236,7 @@ Plain markdown works. **bold**, *italic*, [links](https://example.com), lists, c
 </section>
 
 <footer>
-  FallList · ◊·κ=1 · single HTML · on-device · prime 271 · <a href="https://github.com/sjgant80-hub/falllist" target="_blank">source</a>
+  FallList · single HTML · on-device · <a href="https://github.com/sjgant80-hub/falllist" target="_blank">source</a>
 </footer>
 
 </main>
@@ -1320,11 +1320,12 @@ const Cascade = {
   },
 };
 
-const KCC = {
+const Activity = {
   log(ring, action, w = 1) {
-    state.kcc = (state.kcc || []).concat([{ ts: Date.now(), ring, action, w }]).slice(-500);
+    if (state.kcc && !state.activity) { state.activity = state.kcc; } delete state.kcc;
+    state.activity = (state.activity || []).concat([{ ts: Date.now(), ring, action, w }]).slice(-500);
     saveState();
-    try { new BroadcastChannel('fall-signal').postMessage({ source: 'falllist', type: 'kcc', ring, action, w, ts: Date.now() }); } catch (e) {}
+    try { new BroadcastChannel('fall-signal').postMessage({ source: 'falllist', type: 'activity', ring, action, w, ts: Date.now() }); } catch (e) {}
   },
 };
 
@@ -1401,7 +1402,7 @@ async function addSub() {
   if (!r.ok) { toast(r.reason); if (!r.suppressed) closeModal(); return; }
   state.subscribers = r.subscribers;
   await saveState();
-  KCC.log('R0', 'sub_added', 1);
+  Activity.log('R0', 'sub_added', 1);
   closeModal();
   renderSubs();
   renderDash();
@@ -1631,7 +1632,7 @@ async function sendNewsletter() {
     results,
   });
   await saveState();
-  KCC.log('R4', 'newsletter_sent', ok);
+  Activity.log('R4', 'newsletter_sent', ok);
   try { new BroadcastChannel('fall-signal').postMessage({ source: 'falllist', type: 'sent', subject, recipientCount: ok, ts: Date.now() }); } catch (e) {}
 
   document.getElementById('sendStatus').innerHTML = `<div class="good">◊ Sent · ${ok} delivered · ${fail} failed.</div>`;
@@ -2056,7 +2057,7 @@ function checkUnsubscribeMode() {
   const known = CONSENT.findByToken(state.subscribers, token);
   const shell = (inner) => `<div style="max-width:520px;margin:60px auto;padding:30px;background:var(--bg-2);border:1px solid var(--line);border-radius:14px">
     <h1 style="font-family:'Syne';font-weight:800;font-size:24px;color:var(--gold);margin-bottom:8px">${escHTML(state.settings.listName || 'Unsubscribe')}</h1>${inner}
-    <p style="margin-top:30px;text-align:center;color:var(--muted);font-size:11px">◊·κ=1 · FallList · sovereign newsletter · no third-party tracking</p></div>`;
+    <p style="margin-top:30px;text-align:center;color:var(--muted);font-size:11px">FallList · newsletter · no third-party tracking</p></div>`;
 
   document.body.innerHTML = shell(known
     ? `<p style="color:var(--muted);margin-bottom:20px">Take <b>${escHTML(known.email)}</b> off this list?</p>
@@ -2099,7 +2100,7 @@ function checkSignupMode() {
           <button type="submit" style="width:100%;padding:14px;background:var(--gold);color:#1a1a17;border:none;border-radius:8px;font-size:16px;font-weight:700;cursor:pointer">Subscribe</button>
         </form>
         <p id="pubMsg" style="margin-top:14px;text-align:center;color:var(--muted);font-size:13px"></p>
-        <p style="margin-top:30px;text-align:center;color:var(--muted);font-size:11px">◊·κ=1 · FallList · sovereign newsletter · no third-party tracking</p>
+        <p style="margin-top:30px;text-align:center;color:var(--muted);font-size:11px">FallList · newsletter · no third-party tracking</p>
       </div>
     `;
     return true;
@@ -2171,7 +2172,7 @@ document.getElementById('btnSettings').addEventListener('click', () => {
     <div class="field"><label>Gemini · free</label><input id="stGemini" type="password" value="${escHTML(state.settings.geminiKey)}"></div>
 
     <div style="margin-top:20px;text-align:center;color:var(--muted);font-size:11px">
-      FallList · v${VERSION} · ◊·κ=1 · prime ${PRIME}<br>
+      FallList · v${VERSION}<br>
       your list · your terms · 0% fee
     </div>
     <div style="margin-top:14px"><button class="btn" onclick="saveSettings()">Save</button></div>
